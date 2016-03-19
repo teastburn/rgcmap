@@ -58,14 +58,14 @@ func main() {
 
 	http.HandleFunc("/locswrite.json", write)
 	http.HandleFunc("/locsread.json", read)
-	http.HandleFunc("/test.html", func(res http.ResponseWriter, req *http.Request){
-		http.ServeFile(res, req, fmt.Sprintf("%s/src/github.com/teastburn/rgcmap/static/test.html", os.Getenv("GOPATH")))
-	})
+	http.HandleFunc("/locsread.jsonp", readJsonp)
+	fs := http.FileServer(http.Dir(fmt.Sprintf("%s/src/github.com/teastburn/rgcmap/static", os.Getenv("GOPATH"))))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.ListenAndServe("0.0.0.0:8080", nil)
 }
 
 func read(res http.ResponseWriter, req *http.Request) {
-	res.Header().Set("Access-Control-Allow-Origin", "null")
+	res.Header().Set("Access-Control-Allow-Origin", "*")
 	res.Header().Set("Access-Control-Allow-Credentials", "true")
 	res.Header().Set("Access-Control-Expose-Headers", "FooBar")
 
@@ -80,7 +80,7 @@ func read(res http.ResponseWriter, req *http.Request) {
 	for iter.Scan(&id, &lat, &lon, &address) {
 		log.Println(id, lat, lon, address)
 		props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
-		if address != "" {
+		if address == "" {
 			props["marker-color"] = red
 		} else {
 			props["marker-color"] = green
@@ -101,6 +101,12 @@ func read(res http.ResponseWriter, req *http.Request) {
 	if err := iter.Close(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func readJsonp(res http.ResponseWriter, req *http.Request) {
+	res.Write([]byte("eqfeed_callback("))
+	read(res, req)
+	res.Write([]byte(");"))
 }
 
 type jsonBody struct {
