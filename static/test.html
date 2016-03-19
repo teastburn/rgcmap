@@ -22,7 +22,7 @@
     // As with any other AJAX request, this technique is subject to the Same Origin Policy:
     // http://en.wikipedia.org/wiki/Same_origin_policy
     var featureLayer = L.mapbox.featureLayer()
-            .loadURL('http://example.com:8886/locsread.json')
+            .loadURL('/locsread.json')
             // Once this layer loads, we set a timer to load it again in a few seconds.
             .on('ready', run)
             .addTo(map);
@@ -32,7 +32,7 @@
             map.panTo(l.getLatLng());
         });
         window.setTimeout(function() {
-            featureLayer.loadURL('http://example.com:8886/locsread.json');
+            featureLayer.loadURL('/locsread.json');
         }, 2000);
     }
 </script>

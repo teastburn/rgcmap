@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"log"
 	gj "github.com/kpawlik/geojson"
-	"math/rand"
 	"encoding/json"
 	"os"
 	"fmt"
@@ -74,25 +73,18 @@ func read(res http.ResponseWriter, req *http.Request) {
 	var lat, lon float32
 	red := "#bc2200"
 	green := "#06e104"
-	//fc := gj.FeatureCollection{`type`: "FeatureCollection"}
-	fc := gj.FeatureCollection{}
-	fc.Type = "FeatureCollection"
+	fc := gj.FeatureCollection{Type: "FeatureCollection"}
 
 	iter := session.Query(`SELECT id, lat, lon, address FROM rgc LIMIT 100`).Iter();
 
 	for iter.Scan(&id, &lat, &lon, &address) {
 		log.Println(id, lat, lon, address)
 		props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
-		//if address != "" { // todo
-		if rand.Intn(100) % 2 == 0 {
+		if address != "" {
 			props["marker-color"] = red
 		} else {
 			props["marker-color"] = green
 		}
-
-		// todo remove
-		lat = rand.Float32() * float32(rand.Intn(90))
-		lon = rand.Float32() * float32(rand.Intn(180))
 
 		c := gj.Coordinate{gj.Coord(lat), gj.Coord(lon)}
 		p := gj.NewPoint(c)
