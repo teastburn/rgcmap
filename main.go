@@ -7,6 +7,8 @@ import (
 	gj "github.com/kpawlik/geojson"
 	"math/rand"
 	"encoding/json"
+	"os"
+	"fmt"
 )
 
 var (
@@ -57,6 +59,9 @@ func main() {
 
 	http.HandleFunc("/locswrite.json", write)
 	http.HandleFunc("/locsread.json", read)
+	http.HandleFunc("/test.html", func(res http.ResponseWriter, req *http.Request){
+		http.ServeFile(res, req, fmt.Sprintf("%s/src/github.com/teastburn/rgcmap/static/test.html", os.Getenv("GOPATH")))
+	})
 	http.ListenAndServe("0.0.0.0:8080", nil)
 }
 

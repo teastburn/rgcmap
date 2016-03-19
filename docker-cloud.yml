@@ -1,0 +1,12 @@
+life360-cassandra:
+  image: 'tobert/cassandra:2.1.3'
+  ports:
+    - '9042:9042'
+    - '9160:9160'
+rgcmap:
+  image: 'teastburn/rgcmap-auto:latest'
+  links:
+    - life360-cassandra
+  ports:
+    - '8080:8080'
+  command: cd $GOPATH/src/github.com/teastburn/
