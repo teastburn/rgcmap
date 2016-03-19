@@ -15,7 +15,7 @@ var (
 
 func main() {
 	// connect to the cluster
-	cluster := gocql.NewCluster("192.168.99.100")
+	cluster := gocql.NewCluster("life360-cassandra")
 	var err error
 	session, err = cluster.CreateSession()
 	defer session.Close()

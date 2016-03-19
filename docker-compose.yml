@@ -6,6 +6,10 @@ services:
      - "8080:8080"
     depends_on:
       - life360-cassandra
+    links:
+      - life360-cassandra
+#    volumes:
+#      - .:/opt/src/github.com/teastburn/rgcmap
   life360-cassandra:
     image: tobert/cassandra:2.1.3
     ports:
