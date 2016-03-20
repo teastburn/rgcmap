@@ -7,6 +7,7 @@ import (
 	"github.com/gocql/gocql"
 	gj "github.com/kpawlik/geojson"
 	"github.com/matryer/try"
+	"github.com/yvasiyarov/gorelic"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +26,8 @@ var (
 	dbHost          = kingpin.Flag("db_host", "Cx host").Short('d').Default("192.168.99.100").String()
 	serverPort      = kingpin.Flag("port", "Port to listen on").Short('p').Default("8080").Int()
 	defaultRowLimit = kingpin.Flag("default_row_limit", "Max limit of rows to return by default").Short('l').Default("150").Int()
+	pointTTL = kingpin.Flag("ttl", "TTL in seconds of the life of a row").Short('t').Default("3600").Int()
+	nrSuffix = kingpin.Flag("nr_suffix", "Suffix for New Relic reporting name").Short('n').Default("dev").String()
 )
 
 func main() {
@@ -34,10 +37,18 @@ func main() {
 	dbInit(*dbHost)
 	defer session.Close()
 
+	agent := gorelic.NewAgent()
+	agent.Verbose = true
+	agent.NewrelicName = fmt.Sprintf("tristan-rgcmap-%s", *nrSuffix)
+	agent.NewrelicLicense = "9552dfb472326d435476232c79fa3be9b53c67ac"
+	agent.Run()
+
 	// dynamic endpoints
 	http.HandleFunc("/locswrite.json", write)
 	http.HandleFunc("/locsread.json", read)
 	http.HandleFunc("/locsread.jsonp", readJsonp)
+	http.HandleFunc("/count", count)
+	http.HandleFunc("/reset", reset)
 
 	// serve static html
 	fs := http.FileServer(http.Dir(fmt.Sprintf("%s/src/github.com/teastburn/rgcmap/static", os.Getenv("GOPATH"))))
@@ -74,7 +85,7 @@ func dbInit(host string) {
 	cluster.Keyspace = "ks"
 	session, err = cluster.CreateSession()
 
-	if err := session.Query(`create table if not exists ks.rgc(id timeuuid, lat float, lon float, address text, PRIMARY KEY(id))`).Exec(); err != nil {
+	if err := session.Query(`create table if not exists ks.rgc(id timeuuid, lat float, lon float, address text, PRIMARY KEY((lat), id)) WITH CLUSTERING ORDER BY (id DESC)`).Exec(); err != nil {
 		log.Fatalf("create table failure: %+v", err)
 	}
 
@@ -101,24 +112,26 @@ func read(res http.ResponseWriter, req *http.Request) {
 	qs := req.URL.Query()
 	limit, err := strconv.Atoi(qs.Get("limit"))
 	if err != nil || limit < 1 || limit > 1000 {
+		log.Printf("limit was weird: %+v, %+v", limit, err)
 		limit = *defaultRowLimit
 	}
 
 	var id, address string
 	var lat, lon float32
-	red := "#bc2200"
-	green := "#06e104"
+	//red := "#bc2200"
+	//green := "#06e104"
 	fc := gj.FeatureCollection{Type: "FeatureCollection"}
 
 	iter := session.Query(`SELECT id, lat, lon, address FROM rgc LIMIT ?`, limit).Iter()
 
 	for iter.Scan(&id, &lat, &lon, &address) {
-		props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
-		if address == "" {
-			props["marker-color"] = red
-		} else {
-			props["marker-color"] = green
-		}
+		props := map[string]interface{}{"id": id, "address": address}
+		//props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
+		//if address == "" {
+		//	props["marker-color"] = red
+		//} else {
+		//	props["marker-color"] = green
+		//}
 
 		c := gj.Coordinate{gj.Coord(lat), gj.Coord(lon)}
 		f := gj.NewFeature(gj.NewPoint(c), props, nil)
@@ -142,6 +155,20 @@ func readJsonp(res http.ResponseWriter, req *http.Request) {
 	res.Write([]byte(");"))
 }
 
+func reset(res http.ResponseWriter, req *http.Request) {
+	if err := session.Query(`truncate table ks.rgc`).Exec(); err != nil {
+		log.Fatalf("truncate table failure: %+v", err)
+	}
+}
+
+func count(res http.ResponseWriter, req *http.Request) {
+	var count int
+	if err := session.Query(`select count(*) from ks.rgc LIMIT 1000000`).Scan(&count); err != nil {
+		log.Fatalf("count failure: %+v", err)
+	}
+	res.Write([]byte(strconv.Itoa(count)))
+}
+
 type jsonBody struct {
 	Lat     float32 `json:"lat"`
 	Lon     float32 `json:"lon"`
@@ -157,8 +184,8 @@ func write(res http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Printf("writing %+v", jb)
-	if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?) USING TTL 86400`,
-		gocql.TimeUUID(), jb.Lat, jb.Lon, jb.Address).Exec(); err != nil {
+	if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?) USING TTL ?`,
+		gocql.TimeUUID(), jb.Lat, jb.Lon, jb.Address, *pointTTL).Exec(); err != nil {
 		log.Fatal(err)
 	}
 }

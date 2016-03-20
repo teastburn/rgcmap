@@ -9,4 +9,4 @@ rgcmap:
     - life360-cassandra
   ports:
     - '8080:8080'
-  command: rgcmap -d life360-cassandra
+  command: rgcmap -d life360-cassandra -n prod
