@@ -5,9 +5,8 @@ ENV GOPATH /opt/go
 ENV PROJNAME rgcmap
 ENV SRCPATH github.com/teastburn/$PROJNAME
 
-RUN go get $SRCPATH
+RUN go get -v $SRCPATH
 RUN go install $SRCPATH
-RUN ls -l $GOBIN
 
 CMD $GOBIN/$PROJNAME
 

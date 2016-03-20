@@ -26,8 +26,8 @@ var (
 	dbHost          = kingpin.Flag("db_host", "Cx host").Short('d').Default("192.168.99.100").String()
 	serverPort      = kingpin.Flag("port", "Port to listen on").Short('p').Default("8080").Int()
 	defaultRowLimit = kingpin.Flag("default_row_limit", "Max limit of rows to return by default").Short('l').Default("150").Int()
-	pointTTL = kingpin.Flag("ttl", "TTL in seconds of the life of a row").Short('t').Default("3600").Int()
-	nrSuffix = kingpin.Flag("nr_suffix", "Suffix for New Relic reporting name").Short('n').Default("dev").String()
+	pointTTL        = kingpin.Flag("ttl", "TTL in seconds of the life of a row").Short('t').Default("3600").Int()
+	nrSuffix        = kingpin.Flag("nr_suffix", "Suffix for New Relic reporting name").Short('n').Default("dev").String()
 )
 
 func main() {
@@ -36,12 +36,6 @@ func main() {
 
 	dbInit(*dbHost)
 	defer session.Close()
-
-	agent := gorelic.NewAgent()
-	agent.Verbose = true
-	agent.NewrelicName = fmt.Sprintf("tristan-rgcmap-%s", *nrSuffix)
-	agent.NewrelicLicense = "9552dfb472326d435476232c79fa3be9b53c67ac"
-	agent.Run()
 
 	// dynamic endpoints
 	http.HandleFunc("/locswrite.json", write)
@@ -53,6 +47,12 @@ func main() {
 	// serve static html
 	fs := http.FileServer(http.Dir(fmt.Sprintf("%s/src/github.com/teastburn/rgcmap/static", os.Getenv("GOPATH"))))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	agent := gorelic.NewAgent()
+	agent.Verbose = true
+	agent.NewrelicName = fmt.Sprintf("tristan-rgcmap-%s", *nrSuffix)
+	agent.NewrelicLicense = "9552dfb472326d435476232c79fa3be9b53c67ac"
+	agent.Run()
 
 	hostAndPort := fmt.Sprintf("0.0.0.0:%d", *serverPort)
 	log.Printf("Running on %s", hostAndPort)
@@ -116,16 +116,16 @@ func read(res http.ResponseWriter, req *http.Request) {
 		limit = *defaultRowLimit
 	}
 
-	var id, address string
+	var id, address, date string
 	var lat, lon float32
 	//red := "#bc2200"
 	//green := "#06e104"
 	fc := gj.FeatureCollection{Type: "FeatureCollection"}
 
-	iter := session.Query(`SELECT id, lat, lon, address FROM rgc LIMIT ?`, limit).Iter()
+	iter := session.Query(`SELECT id, lat, lon, address, dateOf(id) FROM rgc LIMIT ?`, limit).Iter()
 
-	for iter.Scan(&id, &lat, &lon, &address) {
-		props := map[string]interface{}{"id": id, "address": address}
+	for iter.Scan(&id, &lat, &lon, &address, &date) {
+		props := map[string]interface{}{"id": id, "address": address, "date": date}
 		//props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
 		//if address == "" {
 		//	props["marker-color"] = red

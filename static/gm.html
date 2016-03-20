@@ -59,6 +59,7 @@
                 var coords = results.features[i].geometry.coordinates;
                 var latLng = new google.maps.LatLng(coords[0], coords[1]);
                 var address = results.features[i].properties.address;
+                console.log("props: ",results.features[i].properties);
 
                 var pin = address == "" ? pinImageBad : pinImageGood;
                 console.log("address: ",address);
