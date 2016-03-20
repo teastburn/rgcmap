@@ -1,4 +1,3 @@
-DATE=$(shell date)
 HOST=$(shell docker-machine ip default)
 
 airports:
@@ -20,7 +19,7 @@ rebuild: dr build
 reup: rebuild up
 
 write:
-	curl $(HOST):8080/locswrite.json -d '{"lat":11.123,"lon":-11.123,"address":"$(DATE)"}' -D -
+	curl $(HOST):8080/locswrite.json -d '{"lat":11.123,"lon":-11.123,"address":"123 fake st"}' -D -
 
 read:
 	curl -s $(HOST):8080/locsread.json?limit=2 | jq ''

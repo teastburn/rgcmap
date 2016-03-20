@@ -116,16 +116,17 @@ func read(res http.ResponseWriter, req *http.Request) {
 		limit = *defaultRowLimit
 	}
 
-	var id, address, date string
+	var id, address string
+	var time time.Time
 	var lat, lon float32
 	//red := "#bc2200"
 	//green := "#06e104"
 	fc := gj.FeatureCollection{Type: "FeatureCollection"}
 
-	iter := session.Query(`SELECT id, lat, lon, address, dateOf(id) FROM rgc LIMIT ?`, limit).Iter()
+	iter := session.Query(`SELECT id, lat, lon, address, toTimestamp(id) FROM rgc LIMIT ?`, limit).Iter()
 
-	for iter.Scan(&id, &lat, &lon, &address, &date) {
-		props := map[string]interface{}{"id": id, "address": address, "date": date}
+	for iter.Scan(&id, &lat, &lon, &address, &time) {
+		props := map[string]interface{}{"id": id, "address": address, "date": time.String()}
 		//props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
 		//if address == "" {
 		//	props["marker-color"] = red
