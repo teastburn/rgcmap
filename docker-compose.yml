@@ -13,5 +13,6 @@ services:
       - life360-cassandra
     links:
       - life360-cassandra
+    command: rgcmap -d life360-cassandra
 #    volumes:
 #      - .:/opt/src/github.com/teastburn/rgcmap

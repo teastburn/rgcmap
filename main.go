@@ -1,73 +1,108 @@
 package main
 
 import (
-	"github.com/gocql/gocql"
-	"net/http"
-	"log"
-	gj "github.com/kpawlik/geojson"
 	"encoding/json"
-	"os"
 	"fmt"
+	"github.com/alecthomas/kingpin"
+	"github.com/gocql/gocql"
+	gj "github.com/kpawlik/geojson"
+	"github.com/matryer/try"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
 )
 
+// db globals
 var (
 	session *gocql.Session
+	cluster *gocql.ClusterConfig
+)
+
+// config options (cli)
+var (
+	dbHost          = kingpin.Flag("db_host", "Cx host").Short('d').Default("192.168.99.100").String()
+	serverPort      = kingpin.Flag("port", "Port to listen on").Short('p').Default("8080").Int()
+	defaultRowLimit = kingpin.Flag("default_row_limit", "Max limit of rows to return by default").Short('l').Default("150").Int()
 )
 
 func main() {
-	// connect to the cluster
-	cluster := gocql.NewCluster("life360-cassandra")
-	var err error
-	session, err = cluster.CreateSession()
+	kingpin.Version("0.0.1")
+	kingpin.Parse()
+
+	dbInit(*dbHost)
 	defer session.Close()
+
+	// dynamic endpoints
+	http.HandleFunc("/locswrite.json", write)
+	http.HandleFunc("/locsread.json", read)
+	http.HandleFunc("/locsread.jsonp", readJsonp)
+
+	// serve static html
+	fs := http.FileServer(http.Dir(fmt.Sprintf("%s/src/github.com/teastburn/rgcmap/static", os.Getenv("GOPATH"))))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	hostAndPort := fmt.Sprintf("0.0.0.0:%d", *serverPort)
+	log.Printf("Running on %s", hostAndPort)
+	err := http.ListenAndServe(hostAndPort, nil)
 	if err != nil {
-		log.Fatal("cluster connect failed 1", err)
+		log.Printf("Failed to bind host and port: %+v", err)
+	}
+}
+
+func dbInit(host string) {
+	var err error
+	// connect to the cluster, retrying for 60s before quitting
+	try.Do(func(attempts int) (bool, error) {
+		cluster = gocql.NewCluster(host)
+		session, err = cluster.CreateSession()
+		if err != nil {
+			time.Sleep(3 * time.Second)
+		}
+		return attempts < 20, err
+	})
+
+	if err != nil {
+		log.Fatal("cx cluster connect failed", err)
 	}
 
 	if err := session.Query(`create keyspace if not exists ks with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`).Exec(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("create keyspace failure: %+v", err)
 	}
 
 	cluster.Keyspace = "ks"
 	session, err = cluster.CreateSession()
-	defer session.Close()
-	if err != nil {
-		log.Fatal("cluster connect failed 2", err)
-	}
 
 	if err := session.Query(`create table if not exists ks.rgc(id timeuuid, lat float, lon float, address text, PRIMARY KEY(id))`).Exec(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("create table failure: %+v", err)
 	}
 
 	// insert some rgcs
-	if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
-		gocql.TimeUUID(), float32(32.145), float32(-1.145), "1231 Fake st, Springfield, OR").Exec(); err != nil {
-		log.Fatal(err)
-	}
-	if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
-		gocql.TimeUUID(), float32(32.145), float32(-1.145), "1232 Fake st, Springfield, OR").Exec(); err != nil {
-		log.Fatal(err)
-	}
-	if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
-		gocql.TimeUUID(), float32(32.145), float32(-1.145), "1233 Fake st, Springfield, OR").Exec(); err != nil {
-		log.Fatal(err)
-	}
-
-
-	log.Printf("Running on 0.0.0.0:8080")
-
-	http.HandleFunc("/locswrite.json", write)
-	http.HandleFunc("/locsread.json", read)
-	http.HandleFunc("/locsread.jsonp", readJsonp)
-	fs := http.FileServer(http.Dir(fmt.Sprintf("%s/src/github.com/teastburn/rgcmap/static", os.Getenv("GOPATH"))))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
-	http.ListenAndServe("0.0.0.0:8080", nil)
+	//if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
+	//	gocql.TimeUUID(), float32(32.145), float32(-1.145), "1231 Fake st, Springfield, OR").Exec(); err != nil {
+	//	log.Fatal(err)
+	//}
+	//if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
+	//	gocql.TimeUUID(), float32(32.145), float32(-1.145), "1232 Fake st, Springfield, OR").Exec(); err != nil {
+	//	log.Fatal(err)
+	//}
+	//if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
+	//	gocql.TimeUUID(), float32(32.145), float32(-1.145), "1233 Fake st, Springfield, OR").Exec(); err != nil {
+	//	log.Fatal(err)
+	//}
 }
 
 func read(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Access-Control-Allow-Origin", "*")
 	res.Header().Set("Access-Control-Allow-Credentials", "true")
-	res.Header().Set("Access-Control-Expose-Headers", "FooBar")
+	//res.Header().Set("Access-Control-Expose-Headers", "FooBar")
+
+	qs := req.URL.Query()
+	limit, err := strconv.Atoi(qs.Get("limit"))
+	if err != nil || limit < 1 || limit > 1000 {
+		limit = *defaultRowLimit
+	}
 
 	var id, address string
 	var lat, lon float32
@@ -75,10 +110,9 @@ func read(res http.ResponseWriter, req *http.Request) {
 	green := "#06e104"
 	fc := gj.FeatureCollection{Type: "FeatureCollection"}
 
-	iter := session.Query(`SELECT id, lat, lon, address FROM rgc LIMIT 100`).Iter();
+	iter := session.Query(`SELECT id, lat, lon, address FROM rgc LIMIT ?`, limit).Iter()
 
 	for iter.Scan(&id, &lat, &lon, &address) {
-		log.Println(id, lat, lon, address)
 		props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
 		if address == "" {
 			props["marker-color"] = red
@@ -87,8 +121,7 @@ func read(res http.ResponseWriter, req *http.Request) {
 		}
 
 		c := gj.Coordinate{gj.Coord(lat), gj.Coord(lon)}
-		p := gj.NewPoint(c)
-		f := gj.NewFeature(p, props, nil)
+		f := gj.NewFeature(gj.NewPoint(c), props, nil)
 		fc.AddFeatures(f)
 	}
 
@@ -99,7 +132,7 @@ func read(res http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := iter.Close(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("iteration closing failure: %+v", err)
 	}
 }
 
@@ -110,9 +143,9 @@ func readJsonp(res http.ResponseWriter, req *http.Request) {
 }
 
 type jsonBody struct {
-	Lat float32 `json:"lat"`
-	Lon float32 `json:"lon"`
-	Address string `json:"address"`
+	Lat     float32 `json:"lat"`
+	Lon     float32 `json:"lon"`
+	Address string  `json:"address"`
 }
 
 func write(res http.ResponseWriter, req *http.Request) {
@@ -122,6 +155,7 @@ func write(res http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		panic(err)
 	}
+
 	log.Printf("writing %+v", jb)
 	if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?) USING TTL 86400`,
 		gocql.TimeUUID(), jb.Lat, jb.Lon, jb.Address).Exec(); err != nil {

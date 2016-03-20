@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta http-equiv="cache-control" content="max-age=0" />
+    <meta http-equiv="cache-control" content="no-cache" />
+    <meta http-equiv="expires" content="0" />
+    <meta http-equiv="expires" content="Tue, 01 Jan 1980 1:00:00 GMT" />
+    <meta http-equiv="pragma" content="no-cache" />
+
     <meta charset=utf-8 />
     <title>GeoJSON from live realtime data</title>
     <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
@@ -16,13 +22,13 @@
 <div id='map'></div>
 <script>
     L.mapbox.accessToken = 'pk.eyJ1IjoidGVhc3RidXJuIiwiYSI6ImNpbHk3YnpxZzA4OHB2OWtzdDBqYXVwbDMifQ.xOGElCtCTUYtUz4XvrEOnA';
-    var map = L.mapbox.map('map', 'mapbox.streets')
+    var map = L.mapbox.map('map', 'teastburn.pena1f55')
             .setView([38, -102.0], 2);
 
     // As with any other AJAX request, this technique is subject to the Same Origin Policy:
     // http://en.wikipedia.org/wiki/Same_origin_policy
     var featureLayer = L.mapbox.featureLayer()
-            .loadURL('/locsread.json')
+            .loadURL('http://rgcmap.rgcmap-auto.bf2a8056.svc.dockerapp.io:8080/locsread.json')
             // Once this layer loads, we set a timer to load it again in a few seconds.
             .on('ready', run)
             .addTo(map);
