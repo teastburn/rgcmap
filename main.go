@@ -50,6 +50,7 @@ func main() {
 
 	agent := gorelic.NewAgent()
 	agent.Verbose = true
+	agent.CollectHTTPStat = true
 	agent.NewrelicName = fmt.Sprintf("tristan-rgcmap-%s", *nrSuffix)
 	agent.NewrelicLicense = "9552dfb472326d435476232c79fa3be9b53c67ac"
 	agent.Run()
@@ -88,26 +89,11 @@ func dbInit(host string) {
 	if err := session.Query(`create table if not exists ks.rgc(id timeuuid, lat float, lon float, address text, PRIMARY KEY((lat), id)) WITH CLUSTERING ORDER BY (id DESC)`).Exec(); err != nil {
 		log.Fatalf("create table failure: %+v", err)
 	}
-
-	// insert some rgcs
-	//if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
-	//	gocql.TimeUUID(), float32(32.145), float32(-1.145), "1231 Fake st, Springfield, OR").Exec(); err != nil {
-	//	log.Fatal(err)
-	//}
-	//if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
-	//	gocql.TimeUUID(), float32(32.145), float32(-1.145), "1232 Fake st, Springfield, OR").Exec(); err != nil {
-	//	log.Fatal(err)
-	//}
-	//if err := session.Query(`INSERT INTO rgc (id, lat, lon, address) VALUES (?, ?, ?, ?)`,
-	//	gocql.TimeUUID(), float32(32.145), float32(-1.145), "1233 Fake st, Springfield, OR").Exec(); err != nil {
-	//	log.Fatal(err)
-	//}
 }
 
 func read(res http.ResponseWriter, req *http.Request) {
 	res.Header().Set("Access-Control-Allow-Origin", "*")
 	res.Header().Set("Access-Control-Allow-Credentials", "true")
-	//res.Header().Set("Access-Control-Expose-Headers", "FooBar")
 
 	qs := req.URL.Query()
 	limit, err := strconv.Atoi(qs.Get("limit"))
@@ -119,20 +105,12 @@ func read(res http.ResponseWriter, req *http.Request) {
 	var id, address string
 	var time time.Time
 	var lat, lon float32
-	//red := "#bc2200"
-	//green := "#06e104"
 	fc := gj.FeatureCollection{Type: "FeatureCollection"}
 
 	iter := session.Query(`SELECT id, lat, lon, address, toTimestamp(id) FROM rgc LIMIT ?`, limit).Iter()
 
 	for iter.Scan(&id, &lat, &lon, &address, &time) {
 		props := map[string]interface{}{"id": id, "address": address, "date": time.String()}
-		//props := map[string]interface{}{"marker-color": "", "marker-size": "medium", "id": id, "address": address}
-		//if address == "" {
-		//	props["marker-color"] = red
-		//} else {
-		//	props["marker-color"] = green
-		//}
 
 		c := gj.Coordinate{gj.Coord(lat), gj.Coord(lon)}
 		f := gj.NewFeature(gj.NewPoint(c), props, nil)
