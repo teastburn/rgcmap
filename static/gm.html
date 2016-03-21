@@ -15,7 +15,7 @@
     <!--<script src="https://maps.googleapis.com/maps/api/js?libraries=visualization">-->
     <!--</script>-->
     <script>
-        var map;
+        var map, markerHist = {}, limit = 150;
 
         function load() {
             var script = document.createElement('script');
@@ -24,15 +24,14 @@
         }
 
         function initialize() {
+            markerHist = {};
             map = new google.maps.Map(document.getElementById('map'), {
                 zoom: 2,
-                center: new google.maps.LatLng(2.8,-187.3),
+                center: new google.maps.LatLng(0.0,0.0),
                 mapTypeId: google.maps.MapTypeId.TERRAIN
             });
             load();
         }
-
-        var totalMarkers = 0, limit = 150;
 
         // Loop through the results array and place a marker for each
         // set of coordinates.
@@ -55,26 +54,41 @@
             console.log("Writing ", results.features.length, " markers to map");
 //            console.log("results: ", results);
 
-            for (var i = 0; i < results.features.length; i++, totalMarkers++) {
+            for (var i = 0; i < results.features.length; i++) {
                 var coords = results.features[i].geometry.coordinates;
-                var latLng = new google.maps.LatLng(coords[0], coords[1]);
-                var address = results.features[i].properties.address;
-                console.log("props: ",results.features[i].properties);
+                var key = coords[0] +","+ coords[1];
+                if (markerHist[key]) {
+                    console.log("skip");
+                } else {
+                    var latLng = new google.maps.LatLng(coords[0], coords[1]);
+                    var address = results.features[i].properties.address;
+//                console.log("props: ",results.features[i].properties);
 
-                var pin = address == "" ? pinImageBad : pinImageGood;
-                console.log("address: ",address);
-                var marker = new google.maps.Marker({
-                    position: latLng,
-                    map: map,
-                    icon: pin,
-                    shadow: pinShadow,
-                    title: address
-                });
+                    var pin = address == "" ? pinImageBad : pinImageGood;
+//                console.log("address: ",address);
+                    new google.maps.Marker({
+                        position: latLng,
+                        map: map,
+                        icon: pin,
+                        shadow: pinShadow,
+                        title: address
+                    });
+                    markerHist[key] = new Date();
+                }
             }
-            console.log("Total markers: ", totalMarkers);
+            console.log("Total markers: ", Object.size(markerHist));
         }
 
+        Object.size = function(obj) {
+            var size = 0, key;
+            for (key in obj) {
+                if (obj.hasOwnProperty(key)) size++;
+            }
+            return size;
+        };
+
         window.eqfeed_callback = cb;
+        window.setInterval(load, 2000);
 
         google.maps.event.addDomListener(window, 'load', initialize);
     </script>
